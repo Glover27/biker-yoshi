@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="cache-control" content="no-cache" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scorecard</title>
+    <style>
+      html, body { margin:0; padding:0; background:transparent; }
+      #wrap { display:flex; align-items:center; justify-content:center; width:100vw; height:100vh; }
+      img { display:block; width:1280px; height:200px; object-fit:contain; }
+      .msg { font-family: system-ui, sans-serif; color:#bbb; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <div id="status" class="msg">Loading…</div>
+      <img id="card" alt="scorecard" style="display:none" />
+    </div>
+
+    <script>
+      const params = new URLSearchParams(location.search);
+      let user = (params.get('user') || '').trim();
+
+      // Optional normalization: force lowercase so your bot and page agree on filenames.
+      user = user.toLowerCase();
+
+      // Very conservative allowlist for safety and predictable filenames.
+      // (Discord usernames are already safe, but this avoids path tricks.)
+      if (!user || !/^[a-z0-9._-]{2,32}$/.test(user)) {
+        document.getElementById('status').textContent = 'Invalid or missing ?user=';
+      } else {
+        const statusEl = document.getElementById('status');
+        const imgEl = document.getElementById('card');
+
+        function refresh() {
+          const safe = encodeURIComponent(user);
+          imgEl.src = `scorecards/${safe}.png?t=${Date.now()}`;
+        }
+
+        imgEl.onload = () => { statusEl.style.display = 'none'; imgEl.style.display = 'block'; };
+        imgEl.onerror = () => { statusEl.textContent = 'Waiting for first image…'; imgEl.style.display = 'none'; };
+
+        refresh();
+        setInterval(refresh, 5000); // adjust refresh rate if needed
+      }
+    </script>
+  </body>
+</html>
