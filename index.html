@@ -81,24 +81,30 @@
         async function refresh() {
           try {
             const head = await getHeadSha();
-
-            // null means 304 (unchanged); only fetch image when head advances
+        
+            // null => 304 Not Modified; only fetch image when head advances
             if (head && head !== lastHead) {
               const b64 = await getImageBase64();
               if (b64) {
-                const cacheBust = Date.now();
-                imgEl.src = `data:image/png;base64,${b64.replace(/\n/g, "")}#${cacheBust}`;
-                statusEl.style.display = 'none';
-                imgEl.style.display = 'block';
+                const next = new Image();
+                // cache-bust in the URL fragment to guarantee a 'new' resource
+                next.src = `data:image/png;base64,${b64.replace(/\n/g, "")}#${Date.now()}`;
+        
+                next.onload = () => {
+                  // swap to the freshly loaded image (forces paint in OBS)
+                  imgEl.src = next.src;
+                  statusEl.style.display = 'none';
+                  imgEl.style.display = 'block';
+                };
               }
               lastHead = head;
             }
           } catch (e) {
-            // Show a gentle status instead of breaking
             statusEl.textContent = 'Waiting for image…';
             imgEl.style.display = 'none';
           }
         }
+
 
         // Refresh right away, then poll.
         refresh();
