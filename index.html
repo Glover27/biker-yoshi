@@ -22,29 +22,62 @@
 
     <script>
       const params = new URLSearchParams(location.search);
-      let user = (params.get('user') || '').trim();
-
-      // Optional normalization: force lowercase so your bot and page agree on filenames.
-      user = user.toLowerCase();
-
-      // Very conservative allowlist for safety and predictable filenames.
-      // (Discord usernames are already safe, but this avoids path tricks.)
+      let user = (params.get('user') || '').trim().toLowerCase();
       if (!user || !/^[a-z0-9._-]{2,32}$/.test(user)) {
         document.getElementById('status').textContent = 'Invalid or missing ?user=';
       } else {
+        const OWNER = "youruser";
+        const REPO  = "yourrepo";
+        const BRANCH = "main";
+        const PATH = `scorecards/${encodeURIComponent(user)}.png`;
+    
         const statusEl = document.getElementById('status');
         const imgEl = document.getElementById('card');
-
-        function refresh() {
-          const safe = encodeURIComponent(user);
-          imgEl.src = `scorecards/${safe}.png?t=${Date.now()}`;
+    
+        let lastHead = null;
+        let etag = null; // cache ETag for contents call
+    
+        async function getHeadSha() {
+          const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`);
+          if (!r.ok) throw new Error("head ref fetch failed");
+          const j = await r.json();
+          return j.object.sha;
         }
-
-        imgEl.onload = () => { statusEl.style.display = 'none'; imgEl.style.display = 'block'; };
-        imgEl.onerror = () => { statusEl.textContent = 'Waiting for first image…'; imgEl.style.display = 'none'; };
-
+    
+        async function getImageBase64() {
+          const headers = etag ? { "If-None-Match": etag } : {};
+          const r = await fetch(
+            `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}?ref=${BRANCH}`,
+            { headers }
+          );
+          if (r.status === 304) return null; // not modified
+          if (!r.ok) throw new Error("contents fetch failed");
+          etag = r.headers.get("ETag") || etag;
+          const j = await r.json();
+          return j.content; // base64
+        }
+    
+        async function refresh() {
+          try {
+            const head = await getHeadSha();
+            if (head !== lastHead) {
+              const b64 = await getImageBase64();
+              if (b64) {
+                imgEl.src = `data:image/png;base64,${b64.replace(/\n/g,'')}`;
+                statusEl.style.display = 'none';
+                imgEl.style.display = 'block';
+              }
+              lastHead = head;
+            }
+          } catch (e) {
+            statusEl.textContent = 'Waiting for image…';
+            imgEl.style.display = 'none';
+          }
+        }
+    
         refresh();
-        setInterval(refresh, 5000); // adjust refresh rate if needed
+        // Poll modestly; you can go faster/slower as needed.
+        setInterval(refresh, 5000);
       }
     </script>
   </body>
