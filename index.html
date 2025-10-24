@@ -26,95 +26,33 @@
     </div>
 
     <script>
-      // ----- User from querystring -----
       const params = new URLSearchParams(location.search);
-      let user = (params.get('user') || '').trim().toLowerCase();
-
+      const user = (params.get('user') || '').trim().toLowerCase();
       const statusEl = document.getElementById('status');
       const imgEl = document.getElementById('card');
-
+    
       if (!user || !/^[a-z0-9._-]{2,32}$/.test(user)) {
         statusEl.textContent = 'Invalid or missing ?user=';
       } else {
-        // ----- Repo settings -----
-        const OWNER  = "Glover27";
-        const REPO   = "biker-yoshi";
-        const BRANCH = "main";
-        const PATH   = `scorecards/${encodeURIComponent(user)}.png`;
-
-        let lastHead = null;
-        let headEtag = null; // ETag for the head ref request
-        let imgEtag  = null; // ETag for the contents (image) request
-
-        async function getHeadSha() {
-          const headers = {};
-          if (headEtag) headers["If-None-Match"] = headEtag;
-
-          const r = await fetch(
-            `https://api.github.com/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`,
-            { headers, cache: "no-store" }
-          );
-          if (r.status === 304) return null; // unchanged head
-          if (!r.ok) throw new Error("head ref fetch failed");
-
-          headEtag = r.headers.get("ETag") || headEtag;
-          const j = await r.json();
-          return j.object.sha;
+        const OWNER="Glover27", REPO="biker-yoshi", BRANCH="main";
+        const PATH=`scorecards/${encodeURIComponent(user)}.png`;
+    
+        function refreshRaw() {
+          const t = Date.now(); // cache-buster so OBS/browser fetch anew
+          const next = new Image();
+          next.crossOrigin = "anonymous";
+          next.onload = () => {
+            imgEl.src = next.src;
+            statusEl.style.display = 'none';
+            imgEl.style.display = 'block';
+          };
+          next.onerror = () => { /* first image not up yet; keep waiting */ };
+          next.src = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${PATH}?t=${t}`;
         }
-
-        async function getImageBase64() {
-          const headers = {};
-          if (imgEtag) headers["If-None-Match"] = imgEtag;
-
-          const r = await fetch(
-            `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}?ref=${BRANCH}`,
-            { headers, cache: "no-store" }
-          );
-          if (r.status === 304) return null; // not modified
-          if (!r.ok) throw new Error("contents fetch failed");
-
-          imgEtag = r.headers.get("ETag") || imgEtag;
-          const j = await r.json();
-          return j.content; // base64
-        }
-
-        async function refresh() {
-          try {
-            const head = await getHeadSha();
-        
-            // null => 304 Not Modified; only fetch image when head advances
-            if (head && head !== lastHead) {
-              const b64 = await getImageBase64();
-              if (b64) {
-                const next = new Image();
-                // cache-bust in the URL fragment to guarantee a 'new' resource
-                next.src = `data:image/png;base64,${b64.replace(/\n/g, "")}#${Date.now()}`;
-        
-                next.onload = () => {
-                  // swap to the freshly loaded image (forces paint in OBS)
-                  imgEl.src = next.src;
-                  statusEl.style.display = 'none';
-                  imgEl.style.display = 'block';
-                };
-              }
-              lastHead = head;
-            }
-          } catch (e) {
-            statusEl.textContent = 'Waiting for image…';
-            imgEl.style.display = 'none';
-          }
-        }
-
-
-        // Refresh right away, then poll.
-        refresh();
-        const intervalMs = 5000;
-        setInterval(refresh, intervalMs);
-
-        // Bonus: refresh immediately when tab becomes visible again
-        document.addEventListener("visibilitychange", () => {
-          if (!document.hidden) refresh();
-        });
+    
+        // Kickoff + poll (3–5s is a nice balance)
+        refreshRaw();
+        setInterval(refreshRaw, 3000);
       }
     </script>
   </body>
