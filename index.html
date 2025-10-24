@@ -11,8 +11,13 @@
       html, body { margin:0; padding:0; background:transparent; }
       #wrap { display:flex; align-items:center; justify-content:center; width:100vw; height:100vh; }
       img { display:block; width:1280px; height:200px; object-fit:contain; }
-      .msg { font-family: system-ui, sans-serif; color:#bbb; }
+      .msg { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#bbb; }
     </style>
+    <script>
+      // version beacon to verify you're seeing the latest page
+      window.__OVERLAY_VERSION__ = "api-loader-v3";
+      console.log("overlay version:", window.__OVERLAY_VERSION__);
+    </script>
   </head>
   <body>
     <div id="wrap">
@@ -21,63 +26,88 @@
     </div>
 
     <script>
+      // ----- User from querystring -----
       const params = new URLSearchParams(location.search);
       let user = (params.get('user') || '').trim().toLowerCase();
+
+      const statusEl = document.getElementById('status');
+      const imgEl = document.getElementById('card');
+
       if (!user || !/^[a-z0-9._-]{2,32}$/.test(user)) {
-        document.getElementById('status').textContent = 'Invalid or missing ?user=';
+        statusEl.textContent = 'Invalid or missing ?user=';
       } else {
-        const OWNER = "Glover27";
-        const REPO  = "biker-yoshi";
+        // ----- Repo settings -----
+        const OWNER  = "Glover27";
+        const REPO   = "biker-yoshi";
         const BRANCH = "main";
-        const PATH = `scorecards/${encodeURIComponent(user)}.png`;
-    
-        const statusEl = document.getElementById('status');
-        const imgEl = document.getElementById('card');
-    
+        const PATH   = `scorecards/${encodeURIComponent(user)}.png`;
+
         let lastHead = null;
-        let etag = null; // cache ETag for contents call
-    
+        let headEtag = null; // ETag for the head ref request
+        let imgEtag  = null; // ETag for the contents (image) request
+
         async function getHeadSha() {
-          const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`);
+          const headers = {};
+          if (headEtag) headers["If-None-Match"] = headEtag;
+
+          const r = await fetch(
+            `https://api.github.com/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`,
+            { headers, cache: "no-store" }
+          );
+          if (r.status === 304) return null; // unchanged head
           if (!r.ok) throw new Error("head ref fetch failed");
+
+          headEtag = r.headers.get("ETag") || headEtag;
           const j = await r.json();
           return j.object.sha;
         }
-    
+
         async function getImageBase64() {
-          const headers = etag ? { "If-None-Match": etag } : {};
+          const headers = {};
+          if (imgEtag) headers["If-None-Match"] = imgEtag;
+
           const r = await fetch(
             `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}?ref=${BRANCH}`,
-            { headers }
+            { headers, cache: "no-store" }
           );
           if (r.status === 304) return null; // not modified
           if (!r.ok) throw new Error("contents fetch failed");
-          etag = r.headers.get("ETag") || etag;
+
+          imgEtag = r.headers.get("ETag") || imgEtag;
           const j = await r.json();
           return j.content; // base64
         }
-    
+
         async function refresh() {
           try {
             const head = await getHeadSha();
-            if (head !== lastHead) {
+
+            // null means 304 (unchanged); only fetch image when head advances
+            if (head && head !== lastHead) {
               const b64 = await getImageBase64();
               if (b64) {
-                imgEl.src = `data:image/png;base64,${b64.replace(/\n/g,'')}`;
+                imgEl.src = `data:image/png;base64,${b64.replace(/\n/g, "")}`;
                 statusEl.style.display = 'none';
                 imgEl.style.display = 'block';
               }
               lastHead = head;
             }
           } catch (e) {
+            // Show a gentle status instead of breaking
             statusEl.textContent = 'Waiting for image…';
             imgEl.style.display = 'none';
           }
         }
-    
+
+        // Refresh right away, then poll.
         refresh();
-        // Poll modestly; you can go faster/slower as needed.
-        setInterval(refresh, 5000);
+        const intervalMs = 5000;
+        setInterval(refresh, intervalMs);
+
+        // Bonus: refresh immediately when tab becomes visible again
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) refresh();
+        });
       }
     </script>
   </body>
