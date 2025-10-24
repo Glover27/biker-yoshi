@@ -86,7 +86,8 @@
             if (head && head !== lastHead) {
               const b64 = await getImageBase64();
               if (b64) {
-                imgEl.src = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${PATH}?t=${Date.now()}`;
+                const cacheBust = Date.now();
+                imgEl.src = `data:image/png;base64,${b64.replace(/\n/g, "")}#${cacheBust}`;
                 statusEl.style.display = 'none';
                 imgEl.style.display = 'block';
               }
