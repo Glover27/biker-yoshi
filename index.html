@@ -35,9 +35,10 @@
         const statusEl = document.getElementById('status');
         const imgEl = document.getElementById('card');
 
+        const OWNER = "Glover27"; const REPO  = "biker-yoshi"; const BRANCH = "main";
         function refresh() {
           const safe = encodeURIComponent(user);
-          imgEl.src = `scorecards/${safe}.png?t=${Date.now()}`;
+          imgEl.src = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/scorecards/${safe}.png?t=${Date.now()}`;
         }
 
         imgEl.onload = () => { statusEl.style.display = 'none'; imgEl.style.display = 'block'; };
