@@ -11,13 +11,8 @@
       html, body { margin:0; padding:0; background:transparent; }
       #wrap { display:flex; align-items:center; justify-content:center; width:100vw; height:100vh; }
       img { display:block; width:1280px; height:200px; object-fit:contain; }
-      .msg { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#bbb; }
+      .msg { font-family: system-ui, sans-serif; color:#bbb; }
     </style>
-    <script>
-      // version beacon to verify you're seeing the latest page
-      window.__OVERLAY_VERSION__ = "api-loader-v3";
-      console.log("overlay version:", window.__OVERLAY_VERSION__);
-    </script>
   </head>
   <body>
     <div id="wrap">
@@ -27,32 +22,29 @@
 
     <script>
       const params = new URLSearchParams(location.search);
-      const user = (params.get('user') || '').trim().toLowerCase();
-      const statusEl = document.getElementById('status');
-      const imgEl = document.getElementById('card');
-    
+      let user = (params.get('user') || '').trim();
+
+      // Optional normalization: force lowercase so your bot and page agree on filenames.
+      user = user.toLowerCase();
+
+      // Very conservative allowlist for safety and predictable filenames.
+      // (Discord usernames are already safe, but this avoids path tricks.)
       if (!user || !/^[a-z0-9._-]{2,32}$/.test(user)) {
-        statusEl.textContent = 'Invalid or missing ?user=';
+        document.getElementById('status').textContent = 'Invalid or missing ?user=';
       } else {
-        const OWNER="Glover27", REPO="biker-yoshi", BRANCH="main";
-        const PATH=`scorecards/${encodeURIComponent(user)}.png`;
-    
-        function refreshRaw() {
-          const t = Date.now(); // cache-buster so OBS/browser fetch anew
-          const next = new Image();
-          next.crossOrigin = "anonymous";
-          next.onload = () => {
-            imgEl.src = next.src;
-            statusEl.style.display = 'none';
-            imgEl.style.display = 'block';
-          };
-          next.onerror = () => { /* first image not up yet; keep waiting */ };
-          next.src = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${PATH}?t=${t}`;
+        const statusEl = document.getElementById('status');
+        const imgEl = document.getElementById('card');
+
+        function refresh() {
+          const safe = encodeURIComponent(user);
+          imgEl.src = `scorecards/${safe}.png?t=${Date.now()}`;
         }
-    
-        // Kickoff + poll (3–5s is a nice balance)
-        refreshRaw();
-        setInterval(refreshRaw, 3000);
+
+        imgEl.onload = () => { statusEl.style.display = 'none'; imgEl.style.display = 'block'; };
+        imgEl.onerror = () => { statusEl.textContent = 'Waiting for first image…'; imgEl.style.display = 'none'; };
+
+        refresh();
+        setInterval(refresh, 5000); // adjust refresh rate if needed
       }
     </script>
   </body>
